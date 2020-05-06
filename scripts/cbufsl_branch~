@@ -1,0 +1,185 @@
+#!/usr/bin/python
+# cbu fsl startup script
+#
+# allow users to pass the folloing arguments in a unix like way (-<param> <value>):
+#
+# -l - how to launch FSL
+#	1 = in current shell (not load balanced)
+#	2 = in new terminal (with load balancing)(default option)
+#	3 = in new terminal with gui (load balanced)
+#
+# -m - 	which machine(s) to use (if -l option = 2 or 3)
+#      	Options include:
+#	- Not specified - use current machine
+#	- <machine name> - launch on a specific host
+#
+# -v - specify FSL version (default =/imaging/local/software/fsl/latest)
+#
+# -x - commands to run when FSL starts (separate each command with a comma)
+#
+# e.g:
+# cbufsl -l 2 -m l52,l53,l54 -v 4.1.8
+# launches FSL 4.1.8 in a new shell on either l52,l53 or l54, whichever has the lowest load
+# 
+
+import sys
+import os
+
+# ---------------------
+# Error handler
+# ---------------------
+def errorh(errno,errinfo):
+    if errno==1: # Input argument not recognised
+        print "Input argument " + errinfo + "not recognised\nValid options are:"
+        print "\t-m <machine name> to specify particular host"
+        print "\t-v <FSL version> to specify a version of FSL"
+        print "\t-l <1,2 or 3> to launch in current shell, new terminal window, or with FSL gui."
+        print "\t-x <commands / name of script> - commands to run when FSL starts."
+
+    elif errno==2: # FSL version not recognised
+        print "FSL version " + errinfo[0] + " not recognised or not available"
+        print "Valid versions are:"
+        for v in errinfo[1]:
+            print v
+    else:
+        print "unknown error"
+    sys.exit()
+
+# ---------------------
+# Main
+# ---------------------
+
+# parse input arguments:
+# ---------------------
+machines = []
+fslver = []
+launchmode = []
+xcmd = []
+arch=os.popen('arch').readlines()[0].strip()
+hostname=os.popen('hostname').readlines()[0].strip()
+
+wrapdir='/home/' + os.popen('whoami').read().split('\n')[0] + '/.cbuwrapper'
+cmdfile=wrapdir + '/cbuwrapper_fsl_tmp'
+
+if not os.path.exists(wrapdir):
+    os.makedirs(wrapdir)
+
+if os.path.exists(cmdfile):
+    os.remove(cmdfile)
+
+
+a=1
+while (a<len(sys.argv)):
+    argtype=sys.argv[a]
+    a=a+1
+    argval=[]
+
+    if (a<len(sys.argv)):
+        if (sys.argv[a][0] != "-"):
+            argval=sys.argv[a]
+            a=a+1
+
+    if (argtype=='-m'):
+        machines = argval
+        machines = machines.split(',')[0]
+
+    elif (argtype=='-v'):
+        fslver = argval
+
+    elif (argtype=='-l'):
+        launchmode = argval
+
+    elif (argtype=='-x'):
+        xcmd = argval.split(',')
+    elif (argtype=='-h'):
+
+        print  "\ncbu fsl startup script\n\nAccepts the folloing arguments in a unix like way (-<param> <value>):\n"
+        print  "-l - how to launch FSL\n\t1 = in current shell (not load balanced)\n\t2 = in new terminal (with load balancing)(default option)"
+        print  "\t3 = in new terminal with gui (load balanced)\n\n-m -  which machine(s) to use (if -l option = 2 or 3)"
+        print  "\tOptions include:\n\t -Not specified - if the -m argument is omitted, the load balancing scripts are" 
+        print  "\t used to pick from all available machines\n\t -List of specific machines - use load balancing to pick from a list of one or"
+        print  "\t more machines. Multiple machines should be specified as a comma separated list,\n\t e.g. startfsl -m l55,l34,l41"
+        print  "\t - Specific machine architecture - use load balancing to pick from 32 or 64 bit\n\t machines. Valid arguments = 32 or 64"
+        print  "\t - Machines with opengl graphics - use load balancing to pick from opengl compabible\n\t machines. Use startfsl -m gl\n"
+        print  "-v - specify FSL version (default =/imaging/local/software/fsl/latest)\n"
+        print  "-x - commands to run when FSL starts (separate each command with a comma)\n"
+        print  "e.g:\nprint  cbufsl -l 2 -m l52,l53,l54 -v 4.1.8\nwould launch FSL 4.1.8 in a new shell on either l52,l53 or l54, whichever has the lowest load\n\n"
+        sys.exit()
+
+    else:
+        errorh(1,sys.argv[a])
+
+if (fslver==[]):
+    fslver="latest"
+
+if (fslver=='latest'):
+    fslver=os.popen('readlink /imaging/local/software/fsl/latest/' + arch +' | cut -f2 -dv | cut -f1 -d/').read().split('\n')[0]
+
+if (fslver[0]!='v' and fslver!="latest"):
+    fslver='v' + fslver
+
+if (launchmode==[]):
+    print('launching in new x11 window')
+    launchmode=2
+
+
+if (machines==[]):
+    machines=os.popen('hostname').readlines()[0].strip()
+
+
+
+
+# Find out which FSL versions are available:
+# -----------------------------------------
+
+gotver=0
+vers=os.popen('ls -d /imaging/local/software/fsl/v*').readlines()
+avail_vers=[]
+for ver in vers:
+    v=ver.split('/')
+    l=len(v)
+    ver=v[l-1].split('\n')[0]
+    avail_vers.append(ver)
+    if (ver==fslver):
+        gotver=1
+
+if (gotver==0):
+    errorh(2,[fslver,avail_vers])
+
+
+
+
+
+# write temporary settings to ~/.cbuwrapper/cbuwrapper_fsl_tmp
+# ---------------------
+f=open(cmdfile,'w')
+
+f.write(fslver + '\n')
+
+if (launchmode=='3'):
+    f.write('fsl &\n')
+
+for x in xcmd:
+    f.write(x + '\n')
+
+f.close()
+
+
+# Launch
+# ---------------------
+
+if (machines==hostname):
+    launchmode=='1'
+
+
+if (launchmode=='1'):
+    cmd="bash -rcfile /imaging/mc04/fm03/scripts/cbufsl_bashrc_branch"
+
+else:
+
+    tstr = "'FSL'"
+    cstr = "'white'"
+
+    cmd='ssh -X ' + machines + ' "xterm -T ' + tstr + ' -bg ' + cstr + ' -e bash --rcfile /imaging/local/software/fsl/cbufsl_bashrc" &'
+
+os.system(cmd)

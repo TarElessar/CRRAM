@@ -1,0 +1,14 @@
+
+function call
+python connectome.py CBU140999/
+
+
+fsl call
+
+/imaging/local/software/fsl/cbufsl
+
+
+Free Surfer setup
+
+export SUBJECTS_DIR=/imaging/mc04/fm03/fs_subjects
+export FREESURFER_HOME=/imaging/local/software/freesurfer/latest

@@ -1,0 +1,2 @@
+/imaging/mc04/fm03/scripts/cbufsl_branch -x "python /imaging/mc04/fm03/scripts/connectome $1"
+
