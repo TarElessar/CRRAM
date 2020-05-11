@@ -1,8 +1,0 @@
-#!/bin/bash
-
-
-for s in CBU141005/;
-do
-     sbatch --export=sub=${s} Analysis.sh
-done
-
